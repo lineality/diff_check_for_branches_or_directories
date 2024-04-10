@@ -2,6 +2,7 @@
 import os
 import subprocess
 from datetime import datetime
+import filecmp
 
 # Set the paths of the two directories
 
@@ -10,7 +11,6 @@ from datetime import datetime
 dir1 = "/path/to/directory1"
 dir2 = "/path/to/directory2"
 """
-
 dir1 = "/path/to/directory1"
 dir2 = "/path/to/directory2"
 
@@ -60,50 +60,63 @@ report_file.write(git_status_output.stdout)
 report_file.write("\n")
 
 
+##############
+##############
+# diff checks
+##############
+##############
+
 #############
 # diff check
 #############
+def compare_directories(dir1, dir2, report_file):
+    dircmp = filecmp.dircmp(dir1, dir2)
 
-# Iterate through the files in the first directory
-for file in files1:
-    file_path1 = os.path.join(dir1, file)
-    file_path2 = os.path.join(dir2, file)
+    # Check if the directories have different files
+    if dircmp.left_only or dircmp.right_only:
+        report_file.write("The directories have different sets of files.\n")
+        if dircmp.left_only:
+            report_file.write("Files present only in the first directory:\n")
+            report_file.write("\n".join(dircmp.left_only))
+            report_file.write("\n")
+        if dircmp.right_only:
+            report_file.write("Files present only in the second directory:\n")
+            report_file.write("\n".join(dircmp.right_only))
+            report_file.write("\n")
 
-    # Check if the file exists in the second directory
-    if file in files2:
-        # Run the diff command and capture the output
-        diff_output = subprocess.run(
-            ["diff", file_path1, file_path2], capture_output=True, text=True
-        )
-
-        # Write the diff output to the report file
-        if diff_output.stdout:
+    # Check if the files have different contents
+    diff_files = dircmp.diff_files
+    if diff_files:
+        report_file.write("Files with different contents:\n")
+        for file in diff_files:
+            file_path1 = os.path.join(dir1, file)
+            file_path2 = os.path.join(dir2, file)
+            diff_output = subprocess.run(
+                ["diff", file_path1, file_path2], capture_output=True, text=True
+            )
             report_file.write(f"Differences for file: {file}\n")
             report_file.write(diff_output.stdout)
             report_file.write("\n")
+
+    # Recursively compare subdirectories
+    for subdir in dircmp.common_dirs:
+        subdir1 = os.path.join(dir1, subdir)
+        subdir2 = os.path.join(dir2, subdir)
+        compare_directories(subdir1, subdir2, report_file)
+
+# Compare the directories recursively
+compare_directories(dir1, dir2, report_file)
 
 
 #############
 # back check
 #############
+# diff check
+#############
 
-# Iterate through the files in the first directory
-for file in files1:
-    file_path1 = os.path.join(dir2, file)
-    file_path2 = os.path.join(dir1, file)
-
-    # Check if the file exists in the second directory
-    if file in files2:
-        # Run the diff command and capture the output
-        diff_output = subprocess.run(
-            ["diff", file_path1, file_path2], capture_output=True, text=True
-        )
-
-        # Write the diff output to the report file
-        if diff_output.stdout:
-            report_file.write(f"Differences for file: {file}\n")
-            report_file.write(diff_output.stdout)
-            report_file.write("\n")
+# Compare the directories recursively
+compare_directories(dir2, dir1, report_file)
 
 # Close the report file
 report_file.close()
+
